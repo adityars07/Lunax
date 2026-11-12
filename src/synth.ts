@@ -53,7 +53,7 @@ export async function synthesize(
     messages,
     stream: true,
     temperature: 0.3,
-    max_tokens: 1024,
+    max_tokens: 600,
   });
 
   let full = '';
