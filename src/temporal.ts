@@ -20,6 +20,48 @@ export function resolveTemporalRefs(
       candidates: [],
     };
 
+    // "this week" / "earlier this week"
+    if (/this\s+week/i.test(result.text)) {
+      const start = new Date(refDate);
+      const day = start.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      const monday = new Date(start);
+      monday.setDate(start.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      ref.candidates.push({
+        start: monday,
+        end: sunday,
+        label: `This week (${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`,
+      });
+      return ref;
+    }
+
+    // "last week"
+    if (/last\s+week/i.test(result.text)) {
+      const start = new Date(refDate);
+      const day = start.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day - 7;
+      const monday = new Date(start);
+      monday.setDate(start.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      ref.candidates.push({
+        start: monday,
+        end: sunday,
+        label: `Last week (${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`,
+      });
+      return ref;
+    }
+
     const primaryDate = result.start.date();
     ref.candidates.push(dayRange(primaryDate));
 

@@ -21,7 +21,7 @@ export const CONVERSATIONAL_STOP_WORDS = new Set([
   'once', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some',
   'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very',
   'on', 'in', 'at', 'by', 'as', 'and', 'or', 'but', 'if', 'something', 'anything',
-  'nothing', 'someone', 'anyone', 'everyone', 'an', 'a',
+  'nothing', 'someone', 'anyone', 'everyone', 'an', 'a', 'the',
   // Conversation & meta terms
   'tell', 'told', 'shortlist', 'shortlisted', 'picked', 'pick', 'discussed',
   'discuss', 'asked', 'asking', 'ask', 'said', 'say', 'saying', 'answer',
@@ -30,6 +30,8 @@ export const CONVERSATIONAL_STOP_WORDS = new Set([
   'tools', 'tool', 'pricing', 'price', 'prices', 'cost', 'costs', 'change',
   'changed', 'changes', 'shipped', 'ship', 'shipping', 'big', 'new', 'latest',
   'options', 'option', 'reps', 'team', 'person', 'people', 'users', 'user',
+  'just', 'talk', 'talked', 'talking', 'update', 'updates', 'earlier', 'recent',
+  'recently', 'mention', 'mentioned', 'named', 'names', 'providers', 'provider',
   // Calendar days/months
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
   'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
@@ -37,7 +39,9 @@ export const CONVERSATIONAL_STOP_WORDS = new Set([
 ]);
 
 export function extractSearchKeywords(message: string): string[] {
-  return message
+  // Strip parenthetical meta-instructions before extracting keywords
+  const cleaned = message.replace(/\([^)]*\)/g, ' ');
+  return cleaned
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .map((w) => w.toLowerCase().trim())
@@ -232,9 +236,14 @@ function queryDateAndKeywords(
   keywords: string[],
   excludeSession: string,
 ): StoredMessage[] {
-  const ftsExpr = keywords.map((k) => `"${k.replace(/"/g, '')}"`).join(' AND ');
+  if (keywords.length === 0) {
+    return queryDateOnly(startUtc, endUtc, excludeSession);
+  }
+
+  // 1. Try strict AND first for exact multi-topic match
+  const ftsAnd = keywords.map((k) => `"${k.replace(/"/g, '')}"`).join(' AND ');
   try {
-    return db
+    const andMatches = db
       .prepare(
         `SELECT m.id, m.session_id AS sessionId, m.role, m.content,
                 m.ts_utc AS tsUtc, m.meta_json AS metaJson
@@ -246,10 +255,43 @@ function queryDateAndKeywords(
          ORDER BY m.ts_utc ASC
          LIMIT 30`,
       )
-      .all(ftsExpr, startUtc, endUtc, excludeSession) as StoredMessage[];
-  } catch {
-    return [];
+      .all(ftsAnd, startUtc, endUtc, excludeSession) as StoredMessage[];
+
+    if (andMatches.length > 0) return andMatches;
+  } catch {}
+
+  // 2. Fall back to BM25 ranked OR search within that date window.
+  //    Only attempt OR with 3+ keywords (with 1-2, AND is definitive).
+  //    Post-filter to require multiple keyword hits to avoid false positives.
+  if (keywords.length >= 3) {
+    const ftsOr = keywords.map((k) => `"${k.replace(/"/g, '')}"`).join(' OR ');
+    try {
+      const orMatches = db
+        .prepare(
+          `SELECT m.id, m.session_id AS sessionId, m.role, m.content,
+                  m.ts_utc AS tsUtc, m.meta_json AS metaJson
+           FROM messages m
+           JOIN messages_fts fts ON fts.rowid = m.rowid
+           WHERE fts.content MATCH ?
+             AND m.ts_utc >= ? AND m.ts_utc <= ?
+             AND m.session_id != ?
+           ORDER BY rank
+           LIMIT 30`,
+        )
+        .all(ftsOr, startUtc, endUtc, excludeSession) as StoredMessage[];
+
+      const minHits = Math.max(2, Math.ceil(keywords.length * 0.4));
+      const filtered = orMatches.filter((m) => {
+        const lower = m.content.toLowerCase();
+        const hits = keywords.filter((k) => lower.includes(k)).length;
+        return hits >= minHits;
+      });
+
+      if (filtered.length > 0) return filtered;
+    } catch {}
   }
+
+  return [];
 }
 
 function queryDateOnly(startUtc: string, endUtc: string, excludeSession: string): StoredMessage[] {
