@@ -5,7 +5,10 @@ import { ROUTER_SYSTEM_PROMPT, buildRouterUserPrompt } from './prompts.js';
 import { formatDateContext } from './temporal.js';
 import { formatMemoryForPrompt } from './memory.js';
 
-const openai = new OpenAI({ apiKey: config.openaiApiKey });
+const openai = new OpenAI({
+  apiKey: config.openaiApiKey,
+  baseURL: config.openaiBaseUrl,
+});
 
 /**
  * Classify the user's query and generate a search plan.

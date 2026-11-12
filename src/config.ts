@@ -3,6 +3,7 @@ dotenv.config();
 
 export const config = {
   openaiApiKey: process.env.OPENAI_API_KEY || '',
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || undefined,
   tavilyApiKey: process.env.TAVILY_API_KEY || '',
   routerModel: process.env.ROUTER_MODEL || 'gpt-4o-mini',
   synthModel:   process.env.SYNTH_MODEL  || 'gpt-4o',

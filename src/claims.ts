@@ -4,7 +4,10 @@ import { config } from './config.js';
 import { CLAIMS_SYSTEM_PROMPT } from './prompts.js';
 import { saveClaims } from './memory.js';
 
-const openai = new OpenAI({ apiKey: config.openaiApiKey });
+const openai = new OpenAI({
+  apiKey: config.openaiApiKey,
+  baseURL: config.openaiBaseUrl,
+});
 
 // ── Async extraction (runs after response has streamed) ─────
 

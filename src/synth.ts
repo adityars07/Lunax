@@ -4,7 +4,10 @@ import { config } from './config.js';
 import { SYNTH_SYSTEM_PROMPT, buildSynthUserPrompt } from './prompts.js';
 import { formatMemoryForPrompt, formatClaimsForPrompt } from './memory.js';
 
-const openai = new OpenAI({ apiKey: config.openaiApiKey });
+const openai = new OpenAI({
+  apiKey: config.openaiApiKey,
+  baseURL: config.openaiBaseUrl,
+});
 
 /**
  * Stream the final synthesis answer to the user.
