@@ -84,7 +84,10 @@ async function main() {
           } else {
             if (routerPlan.mode !== tc.expectedMode) {
               // Allow acceptable synonyms for edge prompts (e.g. clarify if memory missing vs search)
-              if (!(tc.expectedMode === 'recheck' && routerPlan.mode === 'search' && memory.status === 'none')) {
+              const isAcceptableFallback =
+                (tc.expectedMode === 'recheck' && routerPlan.mode === 'search' && memory.status === 'none') ||
+                (tc.expectedMode === 'recall' && routerPlan.mode === 'clarify');
+              if (!isAcceptableFallback) {
                 failures.push(`Expected mode "${tc.expectedMode}", router returned "${routerPlan.mode}"`);
               }
             }

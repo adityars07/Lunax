@@ -58,13 +58,17 @@ function sanitize(raw: Record<string, unknown>, message: string): RouterPlan {
     ? (raw.mode as RouterPlan['mode'])
     : 'search';
 
-  const queries = Array.isArray(raw.queries)
-    ? (raw.queries as string[]).filter((q) => typeof q === 'string').slice(0, 5)
-    : [message];
+  let queries: string[] = [];
+  if (mode !== 'direct' && mode !== 'recall') {
+    queries = Array.isArray(raw.queries)
+      ? (raw.queries as string[]).filter((q) => typeof q === 'string').slice(0, 5)
+      : [message];
+    if (queries.length === 0) queries = [message];
+  }
 
   return {
     mode,
-    queries: queries.length > 0 ? queries : [message],
+    queries,
     since: typeof raw.since === 'string' ? raw.since : null,
     entities: Array.isArray(raw.entities)
       ? (raw.entities as string[]).filter((e) => typeof e === 'string')
