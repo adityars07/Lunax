@@ -55,6 +55,7 @@ export interface RouterPlan {
   since: string | null;            // ISO date for recency filter
   entities: string[];
   clarifyQuestion: string | null;
+  error?: string;
 }
 
 // ── Search ──────────────────────────────────────────────────

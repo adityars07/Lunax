@@ -42,8 +42,9 @@ export async function plan(
     const parsed = JSON.parse(raw);
     return sanitize(parsed, message);
   } catch (err) {
-    console.error('Router error, falling back to search:', err);
-    return fallback(message);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error('Router error, falling back to search:', errMsg);
+    return { ...fallback(message), error: errMsg };
   }
 }
 
