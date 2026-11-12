@@ -28,7 +28,10 @@ export async function extractAndSave(
       max_tokens: 1000,
       messages: [
         { role: 'system', content: CLAIMS_SYSTEM_PROMPT },
-        { role: 'user', content: assistantContent },
+        {
+          role: 'user',
+          content: `Extract the verifiable claims from the text below and return a valid JSON object:\n\n${assistantContent}`,
+        },
       ],
     });
 

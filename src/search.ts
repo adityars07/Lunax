@@ -29,7 +29,7 @@ async function search(query: string, since?: string | null): Promise<SearchResul
       api_key: config.tavilyApiKey,
       query,
       search_depth: 'advanced',
-      max_results: 5,
+      max_results: 3,
       include_answer: false,
       include_raw_content: false,
     };

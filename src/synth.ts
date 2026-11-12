@@ -53,7 +53,7 @@ export async function synthesize(
     messages,
     stream: true,
     temperature: 0.3,
-    max_tokens: 2048,
+    max_tokens: 1024,
   });
 
   let full = '';
@@ -81,22 +81,30 @@ function formatSearchContext(results: SearchResult[]): string {
   if (results.length === 0) return '';
 
   let n = 1;
-  return results
-    .map((sr) => {
-      if (sr.error) return `Search "${sr.query}": ERROR — ${sr.error}`;
-      if (sr.results.length === 0) return `Search "${sr.query}": no results`;
+  const sections: string[] = [];
 
-      const items = sr.results
-        .map((item) => {
-          const num = n++;
-          const date = item.publishedDate ? ` (${item.publishedDate})` : '';
-          return `[${num}] ${item.title}${date}\n    ${item.url}\n    ${item.content}`;
-        })
-        .join('\n\n');
+  for (const sr of results) {
+    if (sr.error) {
+      sections.push(`Search "${sr.query}": ERROR — ${sr.error}`);
+      continue;
+    }
+    if (sr.results.length === 0) {
+      sections.push(`Search "${sr.query}": no results`);
+      continue;
+    }
 
-      return `### Search: "${sr.query}"\n${items}`;
-    })
-    .join('\n\n');
+    const items = sr.results.slice(0, 2).map((item) => {
+      const num = n++;
+      const date = item.publishedDate ? ` (${item.publishedDate})` : '';
+      const snippet = item.content.slice(0, 450).trim();
+      return `[${num}] ${item.title}${date}\n    URL: ${item.url}\n    Summary: ${snippet}`;
+    }).join('\n\n');
+
+    sections.push(`### Search: "${sr.query}"\n${items}`);
+    if (n > 8) break; // Keep prompt concise and under token limits
+  }
+
+  return sections.join('\n\n');
 }
 
 /** Collect all source URLs across all search results for the sources SSE event. */
