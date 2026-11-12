@@ -65,13 +65,15 @@ app.post('/api/chat', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  const sendEvent = (event: string, data: unknown) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  const sendEvent = (event: string, data: any) => {
+    const payload = typeof data === 'object' && data !== null ? { type: event, ...data } : { type: event, data };
+    res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
   };
 
   const writer: SSEWriter = {
     step(id: string, label: string, detail?: string, state: 'running' | 'done' | 'error' = 'running') {
-      const payload: StepEvent = { id, label, detail, state };
+      const mappedState = state === 'running' ? 'run' : state;
+      const payload = { id, label, detail, state: mappedState };
       sendEvent('step', payload);
     },
     text(delta: string) {
