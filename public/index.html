@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lunax — Temporal Memory & Research Agent</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #090a0f;
+      --surface: #12141c;
+      --surface-border: #1e2230;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --accent-soft: rgba(99, 102, 241, 0.12);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --card-bg: #181b26;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    #sidebar {
+      width: 280px;
+      background: var(--surface);
+      border-right: 1px solid var(--surface-border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      padding: 18px 20px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--surface-border);
+    }
+    .brand span.tag {
+      font-size: 0.65rem;
+      background: var(--accent-soft);
+      color: #a5b4fc;
+      padding: 2px 7px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .sidebar-actions {
+      padding: 12px;
+    }
+    .new-chat-btn {
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+    .new-chat-btn:hover { background: var(--accent-hover); }
+
+    .sessions-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .session-item {
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      transition: all 0.15s;
+    }
+    .session-item:hover, .session-item.active {
+      background: var(--card-bg);
+      color: var(--text);
+    }
+    .session-title {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    /* Main Area */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20%;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    @media (max-width: 1024px) {
+      #messages { padding: 20px 20px; }
+      #sidebar { display: none; }
+    }
+
+    .message-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .message-row.user {
+      align-items: flex-end;
+    }
+    .message-row.assistant {
+      align-items: flex-start;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 14px 18px;
+      border-radius: 12px;
+      line-height: 1.55;
+      font-size: 0.95rem;
+    }
+    .bubble.user {
+      background: var(--accent);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .bubble.assistant {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+      width: 100%;
+    }
+
+    /* Markdown inside bubble */
+    .bubble.assistant p { margin-bottom: 10px; }
+    .bubble.assistant p:last-child { margin-bottom: 0; }
+    .bubble.assistant ul, .bubble.assistant ol { margin-left: 20px; margin-bottom: 10px; }
+    .bubble.assistant code { background: #1f2433; padding: 2px 5px; border-radius: 4px; font-size: 0.85em; }
+    .bubble.assistant a { color: #818cf8; text-decoration: none; }
+    .bubble.assistant a:hover { text-decoration: underline; }
+
+    /* Pipeline Step Indicators */
+    .pipeline-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      font-size: 0.82rem;
+    }
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+    }
+    .step-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #4b5563;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .step-icon.running {
+      border-color: var(--accent);
+      border-top-color: transparent;
+      animation: spin 0.8s linear infinite;
+    }
+    .step-icon.done {
+      border-color: var(--success);
+      background: var(--success);
+    }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .step-detail {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-left: auto;
+    }
+
+    /* Diff Card */
+    .diff-card {
+      margin-top: 14px;
+      border: 1px solid var(--surface-border);
+      background: var(--card-bg);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .diff-header {
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.04);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .diff-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .diff-table th, .diff-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--surface-border);
+    }
+    .diff-table th { color: var(--text-muted); font-weight: 500; font-size: 0.75rem; }
+    .status-badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .status-badge.same { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .status-badge.changed { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+    .status-badge.unknown { background: rgba(156, 163, 175, 0.15); color: #9ca3af; }
+
+    /* Sources List */
+    .sources-list {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .source-pill {
+      font-size: 0.75rem;
+      background: var(--card-bg);
+      border: 1px solid var(--surface-border);
+      color: #93c5fd;
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: border-color 0.15s;
+    }
+    .source-pill:hover { border-color: var(--accent); }
+
+    /* Input Dock */
+    #input-dock {
+      padding: 16px 20%;
+      background: var(--bg);
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    @media (max-width: 1024px) {
+      #input-dock { padding: 14px 20px; }
+    }
+
+    .presets {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .preset-chip {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      padding: 5px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .preset-chip:hover {
+      background: var(--card-bg);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    .input-box {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      padding: 8px 12px;
+      align-items: flex-end;
+      gap: 8px;
+      transition: border-color 0.15s;
+    }
+    .input-box:focus-within {
+      border-color: var(--accent);
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.95rem;
+      resize: none;
+      height: 48px;
+      max-height: 160px;
+      outline: none;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+
+    .send-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .send-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .as-of-badge {
+      font-size: 0.72rem;
+      color: #6b7280;
+      margin-top: 8px;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="brand">
+      <span>🌙 Lunax</span>
+      <span class="tag">AGENT</span>
+    </div>
+    <div class="sidebar-actions">
+      <button class="new-chat-btn" onclick="startNewSession()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        New Session
+      </button>
+    </div>
+    <div class="sessions-list" id="sessions-container"></div>
+  </aside>
+
+  <!-- Main Chat -->
+  <main id="main">
+    <div id="messages">
+      <!-- Welcome message -->
+      <div class="message-row assistant">
+        <div class="bubble assistant">
+          <h3>Welcome to Lunax</h3>
+          <p style="margin-top:6px; color: var(--text-muted);">
+            A chat agent that remembers past conversations and checks whether information is still true today using real-time search.
+          </p>
+          <p style="margin-top:8px; font-size:0.85rem; color:#818cf8;">
+            Try asking about a previous topic ("What did I ask last Tuesday? Has pricing changed?") or test a new topic.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Dock -->
+    <div id="input-dock">
+      <div class="presets">
+        <div class="preset-chip" onclick="applyPreset(this)">On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since?</div>
+        <div class="preset-chip" onclick="applyPreset(this)">Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?</div>
+        <div class="preset-chip" onclick="applyPreset(this)">What did I ask you on 3 November? Is your answer still correct today?</div>
+      </div>
+
+      <div class="input-box">
+        <textarea id="chat-input" placeholder="Ask anything, or reference a past conversation..." rows="1" onkeydown="handleKey(event)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let currentSessionId = localStorage.getItem('lunax_session_id') || crypto.randomUUID();
+    localStorage.setItem('lunax_session_id', currentSessionId);
+
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const sessionsContainer = document.getElementById('sessions-container');
+
+    // Load sessions on startup
+    loadSessions();
+
+    function startNewSession() {
+      currentSessionId = crypto.randomUUID();
+      localStorage.setItem('lunax_session_id', currentSessionId);
+      messagesEl.innerHTML = `
+        <div class="message-row assistant">
+          <div class="bubble assistant">
+            <h3>New Session Initialized</h3>
+            <p style="margin-top:6px; color: var(--text-muted);">
+              All conversations are indexed and searchable across time. Ask a new question or reference an earlier day.
+            </p>
+          </div>
+        </div>
+      `;
+      loadSessions();
+    }
+
+    async function loadSessions() {
+      try {
+        const res = await fetch('/api/sessions');
+        const data = await res.json();
+        sessionsContainer.innerHTML = '';
+        (data.sessions || []).forEach(s => {
+          const div = document.createElement('div');
+          div.className = `session-item ${s.id === currentSessionId ? 'active' : ''}`;
+          div.innerHTML = `
+            <span class="session-title">${s.title || 'Untitled Session'}</span>
+            <span style="font-size:0.7rem; color:#4b5563;">${new Date(s.createdAt).toLocaleDateString()}</span>
+          `;
+          div.onclick = () => switchSession(s.id);
+          sessionsContainer.appendChild(div);
+        });
+      } catch (e) {
+        console.error('Failed to load sessions', e);
+      }
+    }
+
+    async function switchSession(id) {
+      currentSessionId = id;
+      localStorage.setItem('lunax_session_id', currentSessionId);
+      loadSessions();
+      try {
+        const res = await fetch(`/api/sessions/${id}/messages`);
+        const data = await res.json();
+        messagesEl.innerHTML = '';
+        (data.messages || []).forEach(m => {
+          appendMessage(m.role, m.content);
+        });
+      } catch (e) {
+        console.error('Failed to load messages', e);
+      }
+    }
+
+    function applyPreset(el) {
+      inputEl.value = el.innerText;
+      inputEl.focus();
+    }
+
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    function appendMessage(role, text) {
+      const row = document.createElement('div');
+      row.className = `message-row ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${role}`;
+      if (role === 'assistant') {
+        bubble.innerHTML = marked.parse(text);
+      } else {
+        bubble.textContent = text;
+      }
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return bubble;
+    }
+
+    async function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      appendMessage('user', text);
+      inputEl.value = '';
+      sendBtn.disabled = true;
+
+      // Assistant container
+      const assistantRow = document.createElement('div');
+      assistantRow.className = 'message-row assistant';
+      
+      const assistantBubble = document.createElement('div');
+      assistantBubble.className = 'bubble assistant';
+
+      // Pipeline status box
+      const pipelineBox = document.createElement('div');
+      pipelineBox.className = 'pipeline-steps';
+      assistantBubble.appendChild(pipelineBox);
+
+      // Stream text box
+      const textContent = document.createElement('div');
+      textContent.className = 'response-text';
+      assistantBubble.appendChild(textContent);
+
+      assistantRow.appendChild(assistantBubble);
+      messagesEl.appendChild(assistantRow);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      let fullText = '';
+      const stepElements = {};
+
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const now = new Date().toISOString();
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: currentSessionId, message: text, tz, now })
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() || '';
+
+          for (const block of parts) {
+            if (!block.trim()) continue;
+            let event = 'message';
+            let dataStr = '';
+
+            for (const line of block.split('\n')) {
+              if (line.startsWith('event: ')) event = line.slice(7).trim();
+              if (line.startsWith('data: ')) dataStr = line.slice(6).trim();
+            }
+
+            if (!dataStr) continue;
+            const data = JSON.parse(dataStr);
+
+            if (event === 'step') {
+              let stepEl = stepElements[data.id];
+              if (!stepEl) {
+                stepEl = document.createElement('div');
+                stepEl.className = 'pipeline-step';
+                pipelineBox.appendChild(stepEl);
+                stepElements[data.id] = stepEl;
+              }
+              const iconClass = data.state === 'running' ? 'running' : 'done';
+              stepEl.innerHTML = `
+                <span class="step-icon ${iconClass}"></span>
+                <span>${data.label}</span>
+                ${data.detail ? `<span class="step-detail">${data.detail}</span>` : ''}
+              `;
+            } else if (event === 'text') {
+              fullText += data.delta;
+              textContent.innerHTML = marked.parse(fullText);
+              messagesEl.scrollTop = messagesEl.scrollHeight;
+            } else if (event === 'diff') {
+              if (data.items && data.items.length > 0) {
+                const diffCard = document.createElement('div');
+                diffCard.className = 'diff-card';
+                diffCard.innerHTML = `
+                  <div class="diff-header">
+                    <span>⚡ Detected Claims Diff</span>
+                  </div>
+                  <table class="diff-table">
+                    <thead>
+                      <tr><th>Entity</th><th>Attribute</th><th>Status</th><th>Previous</th><th>Now / Note</th></tr>
+                    </thead>
+                    <tbody>
+                      ${data.items.map(it => `
+                        <tr>
+                          <td><strong>${it.entity}</strong></td>
+                          <td>${it.attr}</td>
+                          <td><span class="status-badge ${it.status}">${it.status.toUpperCase()}</span></td>
+                          <td>${it.old || '—'}</td>
+                          <td>${it.note || it.now || '—'}</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                `;
+                assistantBubble.appendChild(diffCard);
+              }
+            } else if (event === 'sources') {
+              if (data.items && data.items.length > 0) {
+                const sourcesBox = document.createElement('div');
+                sourcesBox.className = 'sources-list';
+                sourcesBox.innerHTML = data.items.map(s => `
+                  <a href="${s.url}" target="_blank" class="source-pill" rel="noopener">
+                    [${s.n}] ${s.title.slice(0, 36)}${s.title.length > 36 ? '...' : ''}
+                  </a>
+                `).join('');
+                assistantBubble.appendChild(sourcesBox);
+              }
+            } else if (event === 'done') {
+              if (data.asOf) {
+                const asOfEl = document.createElement('div');
+                asOfEl.className = 'as-of-badge';
+                asOfEl.textContent = `Verified as of ${data.asOf}`;
+                assistantBubble.appendChild(asOfEl);
+              }
+              loadSessions();
+            }
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        textContent.innerHTML += `<p style="color:var(--danger)">Error: ${err.message}</p>`;
+      } finally {
+        sendBtn.disabled = false;
+        inputEl.focus();
+      }
+    }
+  </script>
+</body>
+</html>
+

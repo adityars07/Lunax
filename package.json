@@ -1,0 +1,28 @@
+{
+  "name": "lunax",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A chat agent that remembers what it told you, and checks whether it's still true.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "eval": "tsx evals/run.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "chrono-node": "^2.7.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "openai": "^4.77.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.0",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
+
