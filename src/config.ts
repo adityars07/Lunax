@@ -8,6 +8,9 @@ export const config = {
   routerModel: process.env.ROUTER_MODEL || 'gpt-4o-mini',
   synthModel:   process.env.SYNTH_MODEL  || 'gpt-4o',
   claimsModel:  process.env.CLAIMS_MODEL || 'gpt-4o-mini',
+  routerMaxTokens: parseInt(process.env.ROUTER_MAX_TOKENS || '250', 10),
+  claimsMaxTokens: parseInt(process.env.CLAIMS_MAX_TOKENS || '300', 10),
+  synthMaxTokens:  parseInt(process.env.SYNTH_MAX_TOKENS  || '1200', 10),
   port: parseInt(process.env.PORT || '3000', 10),
   dbPath: process.env.DB_PATH || './lunax.db',
 };
