@@ -24,17 +24,17 @@ Rather than relying on an unpredictable LLM ReAct loop or heavy agent frameworks
 ```
 User Message (+ browser tz & now)
   │
-  ├─▶ [1] Temporal Resolver     (chrono-node, ~1ms)      Resolves "last Tuesday", "this week" to candidate date windows
+  ├─▶ [1] Temporal Resolver     (chrono-node, approx. 1ms)   Resolves "last Tuesday", "this week" to candidate date windows
   │
-  ├─▶ [2] Memory Retrieval      (SQLite + FTS5, ~5ms)    Two-tier search (AND → OR) with date range intersection
+  ├─▶ [2] Memory Retrieval      (SQLite + FTS5, approx. 5ms) Two-tier search (AND → OR) with date range intersection
   │
-  ├─▶ [3] Router                (Fast LLM, ~300ms)       Produces typed JSON plan (mode, queries, since date)
+  ├─▶ [3] Router                (Fast LLM, approx. 300ms)    Produces typed JSON plan (mode, queries, since date)
   │
-  ├─▶ [4] Parallel Search       (Tavily API)             Concurrent queries with date filters & 5m TTL cache
+  ├─▶ [4] Parallel Search       (Tavily API)                 Concurrent queries with date filters & 5m TTL cache
   │
-  ├─▶ [5] Synthesis             (Reasoning LLM)          Streams answer with [n] citations and diff cards via SSE
+  ├─▶ [5] Synthesis             (Reasoning LLM)              Streams answer with [n] citations and diff cards via SSE
   │
-  └─▶ [6] Claims Ledger         (Async LLM)              Extracts {entity, attr, value, asOf} for future diffing
+  └─▶ [6] Claims Ledger         (Async LLM)                  Extracts {entity, attr, value, asOf} for future diffing
 ```
 
 For full architectural trade-offs and rationale, see [DESIGN.md](./DESIGN.md).
@@ -90,10 +90,11 @@ OPENAI_BASE_URL=https://api.groq.com/openai/v1
 ROUTER_MODEL=qwen/qwen3.8-27b
 SYNTH_MODEL=qwen/qwen3.8-27b
 CLAIMS_MODEL=qwen/qwen3.8-27b
+SYNTH_MAX_TOKENS=600
 TAVILY_API_KEY=tvly-...
 ```
 
-> **Note:** Groq's free tier enforces a 1,000 output-tokens-per-minute (OTPM) limit. Lunax automatically clamps `max_tokens` for each pipeline step (router: 250, claims: 300, synthesis: 600) to stay within these limits.
+> **Note:** Groq's free tier enforces a 1,000 output-tokens-per-minute (OTPM) limit. Setting `SYNTH_MAX_TOKENS=600` ensures streamed responses stay within these limits.
 
 ### 4. Run the Agent
 ```bash
@@ -118,13 +119,19 @@ This command automatically seeds the SQLite database with benchmark conversation
 | Category | Tests | Network Required |
 |:---|:---|:---|
 | Temporal resolution (candidate generation, timezone edge cases) | 2 | No |
-| Memory retrieval (graceful fallback, empty memory) | 1 | No |
-| Security (prompt injection defense) | 1 | No |
-| Synthesis format (asOf timestamp mandate) | 1 | No |
-| Search mode (fresh pricing inquiry) | 1 | Yes |
-| Router classification (direct, recall, recheck modes) | 6 | Yes |
+| Memory retrieval (empty-memory graceful fallback) | 1 | No |
+| Static behavior & assertions (security prompt injection, timestamp mandate) | 2 | No |
+| Live router classification (direct, search, recall, recheck modes) | 7 | Yes |
 
-The 6 deterministic tests pass offline; the 6 router-dependent tests require a live LLM API connection.
+The 5 deterministic tests run completely offline; the 7 router tests require a live LLM API connection to evaluate mode classification and query generation. In `evals/run.ts`, tests with `expectedCandidateCount` or `expectMemoryHit` verify date parsing (`chrono-node`) and SQLite FTS5 retrieval directly against the database without external calls. Tests with `expectedMode` evaluate live model behavior by querying the configured router model (`ROUTER_MODEL`) and asserting on the returned plan JSON and query counts.
+
+---
+
+## Known Limitations
+
+- **Free-Tier Token Caps:** Free-tier providers like Groq enforce tight output rate limits (e.g. 1,000 OTPM), requiring lower `SYNTH_MAX_TOKENS` (600) which can truncate long multi-entity comparison responses.
+- **Lexical-Only Memory Retrieval:** FTS5 full-text indexing matches keyword tokens and does not capture semantic synonyms (e.g. "Postgres" vs "relational database") unless bridge terms are caught by the router.
+- **Single-Node SQLite:** Memory is stored in a local SQLite file, suitable for single-node setups but requiring replication layers for multi-region deployments.
 
 ---
 
@@ -169,7 +176,7 @@ lunax/
 │   └── run.ts           # Automated test runner
 ├── examples/
 │   └── transcript.md    # Turn-by-turn trace of the challenge prompts
-├── DESIGN.md            # One-page design doc & architectural defense
+├── DESIGN.md            # Design doc: how it works, trade-offs, rejected options
 ├── package.json
 └── tsconfig.json
 ```
@@ -178,17 +185,13 @@ lunax/
 
 ## Key Differentiators
 
-| Feature | Typical Chatbot | Lunax |
-| :--- | :--- | :--- |
-| **Tool Execution** | Open-ended ReAct loop (slow, prone to loops) | Deterministic 6-step pipeline (predictable latency) |
-| **Memory Architecture** | In-context window or heavy vector database | Local SQLite + FTS5 with temporal window filters |
-| **Relative Dates** | LLM guesses what "last Tuesday" means | `chrono-node` generates candidate windows, verified against memory |
-| **Week Ranges** | N/A or LLM hallucinated | Full Monday–Sunday spans for "this week" / "last week" |
-| **Cross-Session Recall** | Limited to current session | Searches all past sessions via FTS5 + date range intersection |
-| **"Is it still correct?"** | LLM compares messy prose text | Grounded diff engine on structured claims `{entity, attr, value}` |
-| **Latency** | Single monolithic LLM call for all tasks | Split architecture: fast model routes, strong model streams |
-| **Provider Flexibility** | Locked to one API vendor | Any OpenAI-compatible provider via `OPENAI_BASE_URL` |
-| **Transparency** | Black box waiting spinner | Real-time SSE telemetry displaying pipeline stages live in the UI |
+| Feature | How Lunax does it |
+| :--- | :--- |
+| **Relative Dates** | `chrono-node` resolves phrases like "last Tuesday" into candidate date windows disambiguated against SQLite memory |
+| **Week Ranges** | Expands "this week" and "last week" into full Monday–Sunday 7-day ranges rather than single-day snapshots |
+| **Cross-Session Recall** | Two-tier lexical retrieval (strict AND falling back to BM25-ranked OR with post-filtering) across all past sessions |
+| **"Is it still correct?"** | Diffs structured claims `{entity, attr, value, asOf}` against fresh search results rather than comparing raw prose |
+| **Transparency** | Real-time Server-Sent Events (SSE) telemetry displays each pipeline stage and diff card live in the UI |
 
 ---
 
