@@ -25,7 +25,7 @@ export async function extractAndSave(
       model: config.claimsModel,
       response_format: { type: 'json_object' },
       temperature: 0,
-      max_tokens: 300,
+      max_tokens: config.claimsMaxTokens,
       messages: [
         { role: 'system', content: CLAIMS_SYSTEM_PROMPT },
         {
