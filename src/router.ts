@@ -29,7 +29,7 @@ export async function plan(
       model: config.routerModel,
       response_format: { type: 'json_object' },
       temperature: 0,
-      max_tokens: 250,
+      max_tokens: config.routerMaxTokens,
       messages: [
         { role: 'system', content: ROUTER_SYSTEM_PROMPT },
         {
